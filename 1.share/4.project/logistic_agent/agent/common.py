@@ -66,12 +66,12 @@ def get_path(map_idx_direct, p_start, p_end, max_row, max_col):
     return path_
 
 
-def get_idx_direct(q_map):
+def get_idx_direct(q_map, num_col):
     cnt = 0
     map_idx_direct = []
     while cnt < len(q_map)-1:
-        for _ in range(9):
-            val_max = q_map[cnt].max()
+        for _ in range(num_col):
+            val_max = max(q_map[cnt])
             if val_max == 0:
                 map_idx_direct.append(None)
             else:
