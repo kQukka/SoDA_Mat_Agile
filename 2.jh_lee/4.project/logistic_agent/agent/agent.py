@@ -57,12 +57,14 @@ class Agent:
     def _run_episodes(self, q_map, **kwargs):
         return True
 
-    def _load_map(self, q_map):
-        if q_map:
-            q_map = np.array(q_map)
+    def _load_matrix(self, matrix_, random=False, low=0, high=0.01):
+        if matrix_:
+            return np.array(matrix_)
+        elif random:
+            size = [self.env.observation_space.n, self.env.action_space.n]
+            return np.random.uniform(size=size, low=low, high=high)
         else:
-            q_map = np.zeros([self.env.observation_space.n, self.env.action_space.n])
-        return q_map
+            return np.zeros([self.env.observation_space.n, self.env.action_space.n])
 
     def _get_setting(self, setting):
         buf = self._init_setting.copy()

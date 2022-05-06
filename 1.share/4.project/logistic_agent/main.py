@@ -105,4 +105,3 @@ def main(idx=IDX_Q_LEARNING):
 
 if __name__ == '__main__':
     main()
-

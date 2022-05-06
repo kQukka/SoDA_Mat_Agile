@@ -51,3 +51,9 @@ def create_map(num_row, num_col, start=None, goal=None, wall=None):
     map_[goal[0]][goal[1]] = INITIAL_ENV_GOAL
     return ["".join(x) for x in map_]
 
+
+class Env:
+    def __init__(self):
+        pass
+
+

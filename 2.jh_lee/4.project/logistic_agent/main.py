@@ -64,7 +64,7 @@ def q_net():
     path_map = ['./logistic_q_net_map_1.csv', './logistic_q_net_map_2.csv', './logistic_q_net_map_3.csv']
     path = ['./logistic_q_net_1_1.csv', './logistic_q_net_1_2.csv', './logistic_q_net_1_3.csv']
 
-    list_q_map = []
+    list_weight = []
     list_agent = []
     # ------------------------------------------------------------------------------------------------------
     for idx, (p_start_end, p_wall) in enumerate(p_setting_env):
@@ -77,23 +77,21 @@ def q_net():
 
         agent = QNetwork(env)
         # q_map, sum_reward_by_epi = agent.run(1000, early_stopping=EarlyStopping())
-        q_map, sum_reward_by_epi = agent.run(NUM_EPISODES, discount=0.9)
+        weight, sum_reward_by_epi = agent.run(NUM_EPISODES, discount=0.9)
         # q_map, sum_reward_by_epi = agent.run(NUM_EPISODES, noise=True, discount=0.9)
-        weight = agent.get_weight()
-        agent.save_q_map(path[idx], q_map.tolist())
+        agent.save_q_map(path[idx], weight.tolist())
         save(path_w[idx], weight)
-        list_q_map.append(q_map)
+        list_weight.append(weight)
         list_agent.append(agent)
 
     path_ = []
     for idx, (p_start_end, p_wall) in enumerate(p_setting_env):
-        q_map = list_q_map[idx]
-        map_idx_direct = get_idx_direct(q_map, NUM_COL)
+        weight = list_weight[idx]
+        map_idx_direct = get_idx_direct(weight, NUM_COL)
         buf_path = get_path(map_idx_direct, p_start_end[0], p_start_end[1], NUM_ROW, NUM_COL)
         path_.append(buf_path)
         print_str_direct(map_idx_direct, NUM_COL)
     gc.collect()
-    pass
 
 
 def main(idx=IDX_Q_LEARNING):

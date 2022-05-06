@@ -59,7 +59,12 @@ class DQN:
 
 def main():
     # Input and output size based on the Env
-    env = gym.make('FrozenLake-v1')
+    register(
+        id='LakeEnv-v1',
+        entry_point='gym.envs.toy_text:FrozenLakeEnv',
+        kwargs={'map_name': '4x4', 'is_slippery': False}
+    )
+    env = gym.make('LakeEnv-v1')
 
     input_size = env.observation_space.n
     output_size = env.action_space.n
