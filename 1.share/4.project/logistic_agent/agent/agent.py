@@ -12,6 +12,9 @@ IDX_LOG_ACTION = 3
 class Agent:
     def __init__(self, env):
         self.env = env
+        self._input_size = self.env.observation_space.n
+        self._output_size = self.env.action_space.n
+
         self._name_arg = []
         self._init_setting = []
         # self._log_epi = [[state_step, q_map_step, reward_step, act_step], ...]
@@ -51,18 +54,20 @@ class Agent:
     def get_log_action(self):
         return self._get_log_item(IDX_LOG_ACTION)
 
-    def run(self, num_episodes, q_map=None, early_stopping=False):
+    def run(self, num_episodes, q_map=None, early_stopping=False, **kwargs):
         return True
 
     def _run_episodes(self, q_map, **kwargs):
         return True
 
-    def _load_map(self, q_map):
-        if q_map:
-            q_map = np.array(q_map)
+    def _load_matrix(self, matrix_, random=False, low=0, high=0.01):
+        if matrix_:
+            return np.array(matrix_)
+        elif random:
+            size = [self.env.observation_space.n, self.env.action_space.n]
+            return np.random.uniform(size=size, low=low, high=high)
         else:
-            q_map = np.zeros([self.env.observation_space.n, self.env.action_space.n])
-        return q_map
+            return np.zeros([self.env.observation_space.n, self.env.action_space.n])
 
     def _get_setting(self, setting):
         buf = self._init_setting.copy()
