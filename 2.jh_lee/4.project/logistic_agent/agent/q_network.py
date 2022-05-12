@@ -3,17 +3,16 @@ import time
 # ------------------------------------------------------------------------------------------------------
 import numpy as np
 import tensorflow as tf
-from logistic_agent.agent.agent import Agent
-
+from ..agent.agent import Agent
+from .common import one_hot 
 
 class QNetwork(Agent):
-    def __init__(self, env):
+    def __init__(self, env, learning_rate=0.1):
         super().__init__(env)
-        self._name_arg = ['greedy', 'noise', 'learning_rate', 'discount']
-        self._init_setting = [False, False, 0, 1.0]
+        self._name_arg = ['greedy', 'noise', 'lr_action', 'discount']
+        self._init_setting = [False, False, 1, 1.0]
         self.__optimizer = None
-        self.__input_size = self.env.observation_space.n
-        self.__output_size = self.env.action_space.n
+        self.__learning_rate = learning_rate
 
     def get_weight(self, weight):
         return np.array(weight.numpy()).tolist()
@@ -24,17 +23,17 @@ class QNetwork(Agent):
         if early_stopping:
             early_stopping.clear()
 
-        learning_rate = 0.1
+        greedy, noise, lr_action, discount = self._get_setting(kwargs)
         # weight
         weight_init = tf.convert_to_tensor(self._load_matrix(weight, True), dtype=tf.float32)
         weight = tf.Variable(weight_init, dtype=tf.float32)
         # optimizer
-        self.__optimizer = tf.optimizers.SGD(learning_rate=learning_rate)
+        self.__optimizer = tf.optimizers.SGD(learning_rate=self.__learning_rate)
 
         start_time = time.time()
         # w_load = self._load_matrix(weight)
         for idx in range(num_episodes):
-            self._run_episodes(weight, setting=kwargs)
+            self._run_episodes(weight, setting=[greedy, noise, discount])
 
             num_ = self._print_progress(idx, num_episodes)
             if self._check_early_stopping(early_stopping):
@@ -44,9 +43,9 @@ class QNetwork(Agent):
         print(f'{(time.time() - start_time)} seconds')
         return weight, sum_reward_by_epi
 
-    # def __run_episodes(self, q_map, idx=0, greedy=False, noise=False, learning_rate=0, discount=1.):
+    # def __run_episodes(self, q_map, idx=0, greedy=False, noise=False, lr_action=0, discount=1.):
     def _run_episodes(self, weight, idx=0, setting=None):
-        greedy, noise, learning_rate, discount = self._get_setting(setting)
+        greedy, noise, discount = setting
         # 시작 state 설정
         state = self.env.reset()
         done = False
@@ -67,16 +66,17 @@ class QNetwork(Agent):
                 q_value[0, act] = reward
             else:
                 # Obtain the Q_s` values by feeding the new state through our network
-                # q_score_next = tf.matmul(self.__one_hot(state_next), weight)
+                # q_score_next = tf.matmul(self.one_hot(state_next), weight)
                 q_score_next = self.__cal_q_value(state_next, weight)
                 # Update Q
                 q_value[0, act] = reward + discount * np.max(q_score_next)
 
+
             # def f_loss(): tf.reduce_sum(input_tensor=tf.square(q_value
-            #                                                    - tf.matmul(self.__one_hot(state), weight)))
+            #                                                    - tf.matmul(self.one_hot(state), weight)))
             # print(f_loss())
             loss = lambda: tf.reduce_sum(input_tensor=tf.square(q_value
-                                                                - tf.matmul(self.__one_hot(state), weight)))
+                                                                - tf.matmul(self.one_hot(state, self._input_size), weight)))
             self.__optimizer.minimize(loss, var_list=weight)
 
             # log
@@ -87,9 +87,6 @@ class QNetwork(Agent):
         # self._log_epi.append(log_step)
         return True
 
-    def __one_hot(self, x):
-        return np.identity(self.__input_size)[x:x + 1].astype(np.float32)
-
     def __cal_q_value(self, state, weight):
-        q_value = tf.matmul(self.__one_hot(state), weight)
+        q_value = tf.matmul(self.one_hot(state, self._input_size), weight)
         return np.array(q_value.numpy())

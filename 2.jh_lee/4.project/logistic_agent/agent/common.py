@@ -1,4 +1,9 @@
-from logistic_agent.logistic_env.common import *
+from ...logistic_env.common import *
+import numpy as np
+
+
+def one_hot(x, size_):
+    return np.identity(size_)[x:x + 1].astype(np.float32)
 
 
 def print_env_map(env_map):

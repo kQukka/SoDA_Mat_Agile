@@ -1,0 +1,42 @@
+# parameter
+q_map, reward = agent.run(
+                          num_episodes=500, buffer=1000, sampling=32,
+                          size_hidden=8, epoch=30, learning_rate=0.001, interval_train=10,
+                          discount=0.5, early_stopping=EarlyStopping(ratio=70)
+                          )
+
+# reward
+if (state == state_next):
+    reward = -10
+    done = True
+if reward == -1:
+    reward = -10
+if reward == 1:
+    reward = 10
+
+# optimizer
+loss = lambda: tf.reduce_mean(
+    input_tensor=tf.square(y_stack - tf.matmul(tf.nn.tanh(tf.matmul(x_stack, self.w_1)), self.w_2)))
+self.optimizer.minimize(loss, var_list=[self.w_1, self.w_2])
+
+
+# q_map
+00 = {ndarray: (4,)} [ -9.755236    0.0214611  -0.1740469 -10.048534 ]			하
+01 = {ndarray: (4,)} [  0.1346224   -8.072261     0.72445464 -10.037976  ]
+02 = {ndarray: (4,)} [-1.9545257  1.252435  -1.2158258 -9.602725 ]
+03 = {ndarray: (4,)} [-0.7090185 -6.304945  -6.4010425 -5.9065456]
+
+04 = {ndarray: (4,)} [-9.281696    0.56868815 -9.897338    0.2405869 ]			하
+05 = {ndarray: (4,)} [0.3537437  0.15300731 0.6294198  0.14853053]
+06 = {ndarray: (4,)} [-13.170172   -2.1503308 -10.539137    0.9718269]
+07 = {ndarray: (4,)} [ 0.20691863 -0.35137168  0.6268446  -0.90806866]
+
+08 = {ndarray: (4,)} [-11.885841   -11.0247755   -0.10446236  -1.5116775 ]		우
+09 = {ndarray: (4,)} [-1.94788    -0.04962834  0.06176227 -7.7420406 ]			우
+10 = {ndarray: (4,)} [-1.6153543  -0.46426848 -2.0452948  -3.1663516 ]			하
+11 = {ndarray: (4,)} [ 1.0319768  -0.08716112  0.89588743  0.23682906]
+
+12 = {ndarray: (4,)} [ 0.21028712 -0.0347181   0.17653653  0.393509  ]
+13 = {ndarray: (4,)} [-10.28045  -15.086383   0.180026  -3.229793]
+14 = {ndarray: (4,)} [ 8.442751   -0.30893221  9.951109    1.2515188 ]			우
+15 = {ndarray: (4,)} [ 0.5490015  -0.32912758  0.9924493   0.13778411]

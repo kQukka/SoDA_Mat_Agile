@@ -1,7 +1,7 @@
 import numpy as np
 
-from logistic_agent.common.csv_ import save, load
-from logistic_agent.common.func import random_argmax
+from logistic.common.csv_ import save, load
+from logistic.common import random_argmax
 
 IDX_LOG_STATE = 0
 IDX_LOG_Q_MAP = 1
@@ -12,6 +12,9 @@ IDX_LOG_ACTION = 3
 class Agent:
     def __init__(self, env):
         self.env = env
+        self._input_size = self.env.observation_space.n
+        self._output_size = self.env.action_space.n
+
         self._name_arg = []
         self._init_setting = []
         # self._log_epi = [[state_step, q_map_step, reward_step, act_step], ...]
@@ -51,7 +54,7 @@ class Agent:
     def get_log_action(self):
         return self._get_log_item(IDX_LOG_ACTION)
 
-    def run(self, num_episodes, q_map=None, early_stopping=False):
+    def run(self, num_episodes, q_map=None, early_stopping=False, **kwargs):
         return True
 
     def _run_episodes(self, q_map, **kwargs):
