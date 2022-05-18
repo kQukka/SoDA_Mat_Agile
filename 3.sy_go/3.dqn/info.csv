@@ -1,0 +1,12 @@
+num_episodes : 10000
+max_step : 180
+buffer : 1000
+sampling : 128
+size_hidden : 90
+epoch : 10
+learning_rate : 0.001
+interval_train : 10
+greedy : True
+noise : False
+lr_action : 1
+discount : 0.95
