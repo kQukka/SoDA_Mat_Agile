@@ -71,7 +71,7 @@ class LogisticEnv:
         action에 따라 step을 진행한다.
         :param action: 에이전트 행동
         :return:
-            (new_x, new_y), new state
+            (new_y, new_x), new state
             reward, 리워드
             done, 종료 여부
             result_step, step 결과
@@ -79,19 +79,18 @@ class LogisticEnv:
         """
         if not self.__p_current:
             return False, False, False, False, False
-        cur_x, cur_y = self.__p_current
+        cur_y, cur_x = self.__p_current
 
-        new_x, new_y = self.__apply_action(action, cur_x, cur_y)
-        result_step, reward, done = self.__get_reward(cur_x, cur_y, new_x, new_y)
-        self.__action.append((new_x, new_y))
+        new_y, new_x = self.__apply_action(action, cur_y, cur_x)
+        result_step, reward, done = self.__get_reward(cur_y, cur_x, new_y, new_x)
+        self.__action.append((new_y, new_x))
 
-        self.__set_grid_reward(result_step, cur_x, cur_y, new_x, new_y)
+        self.__set_grid_reward(result_step, cur_y, cur_x, new_y, new_x)
         self.__sum_reward += reward
 
         if result_step == ID_GENERAL_MOVE:
-            self.__p_current = (new_x, new_y)
-
-        return (new_x, new_y), reward, done, result_step
+            self.__p_current = (new_y, new_x)
+        return (new_y, new_x), reward, done, result_step
 
     def get_gird(self):
         return copy.deepcopy(self.__grid)
@@ -186,67 +185,67 @@ class LogisticEnv:
         self.__grid[p_[0]][p_[1]] = ID_GRID_GOAL
         return True
 
-    def __set_grid_reward(self, result_step, cur_x, cur_y, new_x, new_y):
+    def __set_grid_reward(self, result_step, cur_y, cur_x, new_y, new_x):
         # new state is out grid
         if result_step == ID_OUT_GRID:
-            self.__grid[cur_x][cur_y] = ID_GRID_FLOOR_PASSED
+            self.__grid[cur_y][cur_x] = ID_GRID_FLOOR_PASSED
         # new state is goal
         elif result_step == ID_GOAL:
-            self.__grid[cur_x][cur_y] = ID_GRID_FLOOR_PASSED
-            self.__grid[new_x][new_y] = ID_GRID_ITEM_TAKEN
+            self.__grid[cur_y][cur_x] = ID_GRID_FLOOR_PASSED
+            self.__grid[new_y][new_x] = ID_GRID_ITEM_TAKEN
         # move to obstacle
         elif result_step == ID_OBSTACLE:
-            self.__grid[cur_x][cur_y] = ID_GRID_FLOOR_PASSED
+            self.__grid[cur_y][cur_x] = ID_GRID_FLOOR_PASSED
         # stay current state
         elif result_step == ID_NOT_MOVE:
-            self.__grid[new_x][new_y] = ID_GRID_FLOOR_PASSED
+            self.__grid[new_y][new_x] = ID_GRID_FLOOR_PASSED
         # new state is start
         elif result_step == ID_RETURN:
-            self.__grid[new_x][new_y] = ID_GRID_FLOOR_PASSED
+            self.__grid[new_y][new_x] = ID_GRID_FLOOR_PASSED
         # 일반적인 이동
         elif result_step == ID_GENERAL_MOVE:
-            self.__grid[cur_x][cur_y] = ID_GRID_FLOOR_PASSED
-            self.__grid[new_x][new_y] = ID_GRID_FLOOR_CURRENT
+            self.__grid[cur_y][cur_x] = ID_GRID_FLOOR_PASSED
+            self.__grid[new_y][new_x] = ID_GRID_FLOOR_CURRENT
         return True
     # endregion GRID
 
     # region ACTION, REWARD
     '''change x, y by action'''
-    def __apply_action(self, action, cur_x, cur_y):
-        new_x = cur_x
+    def __apply_action(self, action, cur_y, cur_x):
         new_y = cur_y
+        new_x = cur_x
         # change x, y
         if action == IDX_ACTION_UP:
-            new_x = cur_x - 1
-        elif action == IDX_ACTION_DOWN:
-            new_x = cur_x + 1
-        elif action == IDX_ACTION_LEFT:
             new_y = cur_y - 1
-        elif action == IDX_ACTION_RIGHT:
+        elif action == IDX_ACTION_DOWN:
             new_y = cur_y + 1
+        elif action == IDX_ACTION_LEFT:
+            new_x = cur_x - 1
+        elif action == IDX_ACTION_RIGHT:
+            new_x = cur_x + 1
         else:
             pass
-        return int(new_x), int(new_y)
+        return int(new_y), int(new_x)
 
     '''get reward which new state'''
-    def __get_reward(self, current_x, current_y, new_x, new_y):
+    def __get_reward(self, cur_y, cur_x, new_y, new_x):
         # new state is out grid
-        if any([new_x < 0, new_x >= self.height, new_y < 0, new_y >= self.width]):
+        if any([new_y < 0, new_y >= self.height, new_x < 0, new_x >= self.width]):
             return ID_OUT_GRID, self.REWARD.OUT_GIRD, True
         # new state is goal
-        if self.__p_goal == (new_x, new_y):
+        if self.__p_goal == (new_y, new_x):
             return ID_GOAL, self.REWARD.GOAL, True
         # move to obstacle
-        if (new_x, new_y) in self.__p_obstacle:
+        if (new_y, new_x) in self.__p_obstacle:
             return ID_OBSTACLE, self.REWARD.OBSTACLE, True
         # stay current state
-        if (current_x, current_y) == (new_x, new_y):
+        if (cur_y, cur_x) == (new_y, new_x):
             return ID_NOT_MOVE, self.REWARD.NOT_MOVE, True
         # If items is not goal, it's obstacle
-        if (new_x, new_y) in self.__p_item.values():
+        if (new_y, new_x) in self.__p_item.values():
             return ID_OBSTACLE, self.REWARD.OBSTACLE, True
         # new state is start
-        if self.__p_start == (new_x, new_y):
+        if self.__p_start == (new_y, new_x):
             return ID_RETURN, self.REWARD.RETURN, True
         # general move
         return ID_GENERAL_MOVE, self.REWARD.MOVE, False
@@ -267,14 +266,14 @@ if __name__ == "__main__":
         sim.set_route((9, 4), sim.get_p_item(items[0]))
 
         p_start = sim.reset()
-        actions = [IDX_ACTION_UP, IDX_ACTION_LEFT,
+        actions = [IDX_ACTION_UP, IDX_ACTION_LEFT, IDX_ACTION_LEFT, IDX_ACTION_LEFT,
                    IDX_ACTION_UP, IDX_ACTION_UP, IDX_ACTION_UP, IDX_ACTION_UP, IDX_ACTION_UP,
-                   IDX_ACTION_UP, IDX_ACTION_UP, IDX_ACTION_UP]
+                   IDX_ACTION_LEFT]
 
         i = 0
         done_ = False
         while done_ is False:
-            (new_x, new_y), reward, done, result_step = sim.step(actions[i])
+            (new_y, new_x), reward, done_, result_step = sim.step(actions[i])
 
             grid = sim.get_gird()
 
