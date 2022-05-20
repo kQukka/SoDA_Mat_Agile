@@ -33,10 +33,11 @@ def run_dqn():
     env.set_route((9, 4), env.get_p_item(items[0]))
 
     agent = DQN(env, size_input=env.height * env.width, size_output=env.num_action)
-    q_map, reward = agent.run(2000,
-                              buffer=1000, sampling=128,
-                              size_hidden=40, epoch=30, learning_rate=0.01, interval_train=10,
-                              discount=0.5, early_stopping=EarlyStopping(ratio=70), save_result=True)
+    q_map, reward = agent.run(1000,
+                              buffer=500, sampling=200,
+                              size_hidden=40, epoch=3, learning_rate=0.001, interval_train=10,
+                              discount=0.95, early_stopping=EarlyStopping(ratio=70), save_result=True, 
+                              greedy=0.999)
 
 
 if __name__ == '__main__':

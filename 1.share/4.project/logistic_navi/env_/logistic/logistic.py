@@ -274,9 +274,9 @@ if __name__ == "__main__":
         i = 0
         done_ = False
         while done_ is False:
-            next_obs, reward_, cumul, done_, goal_reward = sim.step(actions[i])
+            (new_x, new_y), reward, done, result_step = sim.step(actions[i])
 
-            grid = next_obs
+            grid = sim.get_gird()
 
             if (done_ is True) or (i == (len(actions) - 1)):
                 i = 0

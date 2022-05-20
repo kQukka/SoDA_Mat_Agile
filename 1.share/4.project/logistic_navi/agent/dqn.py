@@ -6,9 +6,9 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 from .agent import Agent
-from . import common
+from .common import one_hot
 from common.func_ import save, load, create_dir, make_path, edit
-from env_.logistic.common import ID_GOAL, INITIAL_ACTION, STR_RESULT
+from env_.logistic.common import ID_GOAL, INITIAL_ACTION, STR_RESULT, IDX_ACTION_UP
 
 
 class Network:
@@ -36,7 +36,7 @@ class Network:
     def get_q_map(self):
         q_map = []
         for state in range(self.input_size):
-            q_map.append(self.predict(common.one_hot(state, self.input_size)))
+            q_map.append(self.predict(one_hot(state, self.input_size)))
         return q_map
 
     def get_loss(self, x_stack, y_stack):
@@ -59,10 +59,17 @@ class DQN(Agent):
         self.dqn_update = None
         self.dqn_target = None
 
+        # ksy
+        self.start_time = 0
+        self.lastest_reward = deque(maxlen=100)
+
+    # -----------------------------------------------------------------------------------------------------------
+    # region SAVE
     def make_dir_log(self, set_run):
         create_dir(f'./log')
+        create_dir(f'./log/dqn')
         name_set = f'{set_run[0]}_{set_run[3]}_{set_run[4]}_{set_run[5]}'
-        path = f'./log/{time.strftime("%y%m%d_%H%M%S")}_{name_set}'
+        path = f'./log/dqn/{time.strftime("%y%m%d_%H%M%S")}_{name_set}'
         try:
             create_dir(path)
             self.__path_dir = path
@@ -74,14 +81,14 @@ class DQN(Agent):
     def save_info(self, set_run):
         name = ['num_episodes', 'max_step', 'buffer', 'sampling',
                 'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'greedy', 'noise', 'lr_action', 'discount']
-        data_ = self.get_result(name, set_run)
+        data_ = self.get_str_setting(name, set_run)
         save(make_path(self.__path_dir, 'info', '.csv'), data_)
 
     def save_result(self, set_run):
         data_ = [[time.strftime("%y%m%d_%H:%M:%S")]]
         name = ['num_episodes', 'max_step', 'buffer', 'sampling',
                 'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'greedy', 'noise', 'lr_action', 'discount']
-        data_.extend(self.get_result(name, set_run))
+        data_.extend(self.get_str_setting(name, set_run))
         data_.extend(self.env.get_result())
         data_.append([])
         data_.append(['q-map'])
@@ -111,17 +118,20 @@ class DQN(Agent):
         data_.extend(q_map)
         edit(path, data_)
 
-    def get_result(self, name, setting):
+    def get_str_setting(self, name, setting):
         data_ = []
         for idx in range(len(name)):
             data_.append([f'{name[idx]} : {setting[idx]}'])
         return data_
 
+    # endregion SAVE
+
+    # -----------------------------------------------------------------------------------------------------------
     def run(self, num_episodes, max_step=None, buffer=2500, sampling=32,
             size_hidden=1, epoch=50, learning_rate=0.1, interval_train=10,
             early_stopping=False, save_result=False, **kwargs):
         greedy, noise, lr_action, discount = self._get_setting(kwargs)
-        max_step = self.__init_run(early_stopping, max_step, sampling, buffer)
+        max_step = self.__init_run(max_step, size_hidden, buffer)
 
         set_run = [num_episodes, max_step, buffer, sampling,
                    size_hidden, epoch, learning_rate, interval_train, greedy, noise, lr_action, discount]
@@ -130,16 +140,17 @@ class DQN(Agent):
         result_step = []
         for idx_epi in range(num_episodes):
             start_time = time.time()
-            buf_result = self._run_episodes(max_step, idx_epi=idx_epi, setting=kwargs)
+            buf_result = self._run_episodes(max_step, idx_epi=idx_epi, setting=[greedy, noise])
             result_step.append(buf_result)
 
-            if idx_epi % interval_train == 1:  # train every interval
-                if len(self.__replay_buffer) >= sampling:
+            # train every interval
+            if idx_epi % interval_train == 0:
+                if len(self.__replay_buffer) >= buffer:
                     loss_pre, loss_aft = self.__train(idx_epi, epoch, sampling, discount)
                     self.save_log_train(idx_epi, loss_pre, loss_aft, self.dqn_target.get_q_map())
 
                     print(f'{(time.time() - start_time)} seconds')
-                    self.__replay_buffer.clear()
+                    # self.__replay_buffer.clear()
             num_ = self._print_progress(idx_epi, num_episodes)
 
             if not self.__check_early_stopping(early_stopping, idx_epi, buf_result):
@@ -151,61 +162,74 @@ class DQN(Agent):
         gc.collect()
         return self.dqn_target.get_q_map(), result_step
 
+    # -----------------------------------------------------------------------------------------------------------
+    def __init_run(self, max_step, size_hidden, buffer):
+        if not max_step:
+            max_step = 2 * (self._size_input * self._size_output)
+        self.__replay_buffer = deque(maxlen=buffer)
+
+        self.dqn_update = Network(self._size_input, self._size_output, size_hidden)
+        self.dqn_target = Network(self._size_input, self._size_output, size_hidden)
+
+        self.dqn_target.w_1 = tf.Variable(tf.identity(self.dqn_update.w_1), dtype=tf.float32)
+        self.dqn_target.w_2 = tf.Variable(tf.identity(self.dqn_update.w_2), dtype=tf.float32)
+        return max_step
+
     def _run_episodes(self, max_step, idx_epi=0, setting=None):
+        greedy, noise = setting
+        log_ = [[f'idx_epi : {idx_epi}'],
+                ['time', 'action', 'p_cur', 'p_new', 'state_cur', 'state_new', 'reward', 'done', 'result_step']]
+
+        # env 초기화, 시작 state_cur 설정
         p_cur = self.env.reset()
-        state = self.convert_p_to_idx(p_cur)
+        state_cur = self._convert_p_to_idx(p_cur)
 
         done = False
         cnt_step = 0
         result_step = None
-        log_ = [[f'idx_epi : {idx_epi}'],
-                ['time', 'action', 'p_cur', 'p_new', 'state', 'state_new', 'reward', 'done', 'result_step']]
         while not done:
-            q_value = self.dqn_target.predict(self.one_hot(state))
-            action = self._get_action_noise(q_value, idx=idx_epi, greedy=True)
+            q_value = self.dqn_target.predict(self._one_hot(state_cur))
+            action = 0
+            # 첫스텝은 action 고정
+            if cnt_step == 0:
+                action = IDX_ACTION_UP
+            else:
+                action = self._get_action_noise(q_value, idx_epi=idx_epi, greedy=greedy, noise=noise)
 
-            # Get new state and reward from environment
+            # Get new state_cur and reward from environment
             p_new, reward, done, result_step = self.env.step(action)
-            self.__replay_buffer.append((state, action, reward, self.convert_p_to_idx(p_new), done))
+            state_new = self._convert_p_to_idx(p_new)
+            self.__replay_buffer.append((state_cur, action, reward, state_new, done))
             log_.append([time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
-                         p_cur, p_new, state, self.convert_p_to_idx(p_new),
+                         p_cur, p_new, state_cur, state_new,
                          reward, done, STR_RESULT[result_step]])
 
+            ## ksy
+            if done:
+                elapsed_time = time.time() - self.start_time
+                if reward == 10:
+                    self.lastest_reward.append(1)
+                else:
+                    self.lastest_reward.append(0)
+                lastest_score = sum(self.lastest_reward)
+                self.__report(idx_epi, cnt_step, state_cur, elapsed_time, lastest_score, reward)
+
+            state_cur = state_new
+            cnt_step += 1
             if cnt_step > max_step:
                 break
-            state = self.convert_p_to_idx(p_new)
-            cnt_step += 1
         log_.append([])
         self.save_log_epi(log_)
         del log_
         return result_step
 
-    def __init_run(self, early_stopping, max_step, sampling, buffer):
-        if early_stopping:
-            early_stopping.clear()
-        if not max_step:
-            max_step = 2 * (self._size_input * self._size_output)
-
-        self.dqn_update = Network(self._size_input, self._size_output, sampling)
-        self.dqn_target = Network(self._size_input, self._size_output, sampling)
-        self.__replay_buffer = deque(maxlen=buffer)
-        return max_step
-
-    def __check_early_stopping(self, early_stopping, idx_epi, buf_result):
-        if early_stopping:
-            if not self.dqn_update.loss == 0:
-                flg = idx_epi
-                if buf_result == ID_GOAL:
-                    flg = True
-                # if early_stopping.check_stopping(round(float(self.dqn_update.loss), 5)):
-                if early_stopping.check_stopping(flg):
-                    return False
-        return True
-
+    # -----------------------------------------------------------------------------------------------------------
     def __train(self, idx_epi, epoch, sampling, discount):
         # Get a random batch of experiences
         x_stack = None
         y_stack = None
+        loss_pre = None
+        loss_aft = None
         for idx_epoch in range(epoch):
             minibatch = random.sample(self.__replay_buffer, sampling)
             x_stack, y_stack = self.__make_target(minibatch, discount)
@@ -214,6 +238,7 @@ class DQN(Agent):
             self.dqn_update.update(x_stack, y_stack)
             loss_aft = float(self.dqn_update.get_loss(x_stack, y_stack))
             self.save_log_batch(idx_epi, idx_epoch, loss_pre, loss_aft, minibatch)
+        print('[LOG] epi:', idx_epi, 'loss:', loss_pre, '=>', loss_aft)
 
         # 일정 epi 횟수마다 q_pred의 W로 업데이트 (W2_1, W2_2 = W1_1, W1_2)
         loss_pre = float(self.dqn_target.get_loss(x_stack, y_stack))
@@ -225,28 +250,58 @@ class DQN(Agent):
     def __make_target(self, minibatch, discount):
         x_stack = np.empty(0, dtype=np.float32).reshape(0, self._size_input)
         y_stack = np.empty(0, dtype=np.float32).reshape(0, self._size_output)
-        for state, action, reward, state_next, done in minibatch:
+        for state_cur, action, reward, state_next, done in minibatch:
             # Get stored information from the buffer
-            q_update = self.dqn_update.predict(self.one_hot(state))
+            q_update = self.dqn_update.predict(self._one_hot(state_cur))
             # debug
             q_map_update = self.dqn_update.get_q_map()
 
             if done:
                 q_update[action] = reward
             else:
-                q_target = self.dqn_target.predict(self.one_hot(state))
-                q_pred = self.dqn_update.predict(self.one_hot(state))
-                q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
-            q_map_update[state] = q_update
+                q_target = self.dqn_target.predict(self._one_hot(state_next))
+                # # !DQN 강의
+                # q_pred = self.dqn_update.predict(self._one_hot(state_next))
+                # q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
 
-            input_state = [self.one_hot(idx) for idx in range(self._size_input)]
-            for idx in range(self._size_input):
-                x_stack = np.vstack([x_stack, input_state[idx]])
-                y_stack = np.vstack([y_stack, q_map_update[idx]])
+                # !Q net 강의
+                q_update[action] = reward + discount * np.argmax(q_target)
+
+            # # Q map 전체 optimize
+            # q_map_update[state_cur] = q_update
+            # input_state = [self._one_hot(idx) for idx in range(self._size_input)]
+            # for idx in range(self._size_input):
+            #     x_stack = np.vstack([x_stack, input_state[idx]])
+            #     y_stack = np.vstack([y_stack, q_map_update[idx]])
+
+            # Q value optimize
+            x_stack = np.vstack([x_stack, self._one_hot(state_cur)])
+            y_stack = np.vstack([y_stack, q_update])
         return x_stack, y_stack
 
-    def convert_p_to_idx(self, p_):
-        return (p_[0] * self.env.width) + p_[1]
+    def __check_early_stopping(self, early_stopping, idx_epi, buf_result):
+        if early_stopping:
+            if idx_epi == 0:
+                early_stopping.clear()
+            if not self.dqn_update.loss == 0:
+                flg = idx_epi
+                if buf_result == ID_GOAL:
+                    flg = True
+                # if early_stopping.check_stopping(round(float(self.dqn_update.loss), 5)):
+                if early_stopping.check_stopping(flg):
+                    return False
+        return True
 
-    def one_hot(self, state):
-        return common.one_hot(state, self._size_input)
+    def __report(self, episode, steps, state_cur, elapsed_time, lastest_score, reward):
+        mins = int(elapsed_time / 60)
+        secondes = int(elapsed_time % 60)
+        colour = '\033[92m' if reward > 0 else '\033[91m'
+        print("episode: " + str(episode).rjust(4)
+              #+ ' ε: {:.3f}'.format(self.dqn_update.e)
+              + " steps: " + str(steps).rjust(3)
+              + " state_cur: [" + str(state_cur).rjust(2) + "]"
+              + ' time: {:02d}'.format(mins)
+              + ':{:02d}'.format(secondes)
+              + " score: " + str(lastest_score).rjust(2)
+              + ' memory:' + str(len(self.__replay_buffer)).rjust(4)
+              + f' reward: {colour}' + f"{reward:+.1f}" + '\033[0m')
