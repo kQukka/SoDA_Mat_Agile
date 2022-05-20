@@ -59,6 +59,10 @@ class DQN(Agent):
         self.dqn_update = None
         self.dqn_target = None
 
+        # ksy
+        self.start_time = 0
+        self.lastest_reward = deque(maxlen=100)
+
     # -----------------------------------------------------------------------------------------------------------
     # region SAVE
     def make_dir_log(self, set_run):
@@ -174,9 +178,9 @@ class DQN(Agent):
     def _run_episodes(self, max_step, idx_epi=0, setting=None):
         greedy, noise = setting
         log_ = [[f'idx_epi : {idx_epi}'],
-                ['time', 'action', 'p_cur', 'p_new', 'state', 'state_new', 'reward', 'done', 'result_step']]
+                ['time', 'action', 'p_cur', 'p_new', 'state_cur', 'state_new', 'reward', 'done', 'result_step']]
 
-        # env 초기화, 시작 state 설정
+        # env 초기화, 시작 state_cur 설정
         p_cur = self.env.reset()
         state_cur = self._convert_p_to_idx(p_cur)
 
@@ -190,15 +194,25 @@ class DQN(Agent):
             if cnt_step == 0:
                 action = IDX_ACTION_UP
             else:
-                action = self._get_action_noise(q_value, idx=idx_epi, greedy=greedy, noise=noise)
+                action = self._get_action_noise(q_value, idx_epi=idx_epi, greedy=greedy, noise=noise)
 
-            # Get new state and reward from environment
+            # Get new state_cur and reward from environment
             p_new, reward, done, result_step = self.env.step(action)
             state_new = self._convert_p_to_idx(p_new)
             self.__replay_buffer.append((state_cur, action, reward, state_new, done))
             log_.append([time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
                          p_cur, p_new, state_cur, state_new,
                          reward, done, STR_RESULT[result_step]])
+
+            ## ksy
+            if done:
+                elapsed_time = time.time() - self.start_time
+                if reward == 10:
+                    self.lastest_reward.append(1)
+                else:
+                    self.lastest_reward.append(0)
+                lastest_score = sum(self.lastest_reward)
+                self.__report(idx_epi, cnt_step, state_cur, elapsed_time, lastest_score, reward)
 
             state_cur = state_new
             cnt_step += 1
@@ -236,24 +250,33 @@ class DQN(Agent):
     def __make_target(self, minibatch, discount):
         x_stack = np.empty(0, dtype=np.float32).reshape(0, self._size_input)
         y_stack = np.empty(0, dtype=np.float32).reshape(0, self._size_output)
-        for state, action, reward, state_next, done in minibatch:
+        for state_cur, action, reward, state_next, done in minibatch:
             # Get stored information from the buffer
-            q_update = self.dqn_update.predict(self._one_hot(state))
+            q_update = self.dqn_update.predict(self._one_hot(state_cur))
             # debug
             q_map_update = self.dqn_update.get_q_map()
 
             if done:
                 q_update[action] = reward
             else:
-                q_target = self.dqn_target.predict(self._one_hot(state))
-                q_pred = self.dqn_update.predict(self._one_hot(state))
-                q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
-            q_map_update[state] = q_update
+                q_target = self.dqn_target.predict(self._one_hot(state_next))
+                # # !DQN 강의
+                # q_pred = self.dqn_update.predict(self._one_hot(state_next))
+                # q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
 
-            input_state = [self._one_hot(idx) for idx in range(self._size_input)]
-            for idx in range(self._size_input):
-                x_stack = np.vstack([x_stack, input_state[idx]])
-                y_stack = np.vstack([y_stack, q_map_update[idx]])
+                # !Q net 강의
+                q_update[action] = reward + discount * np.argmax(q_target)
+
+            # # Q map 전체 optimize
+            # q_map_update[state_cur] = q_update
+            # input_state = [self._one_hot(idx) for idx in range(self._size_input)]
+            # for idx in range(self._size_input):
+            #     x_stack = np.vstack([x_stack, input_state[idx]])
+            #     y_stack = np.vstack([y_stack, q_map_update[idx]])
+
+            # Q value optimize
+            x_stack = np.vstack([x_stack, self._one_hot(state_cur)])
+            y_stack = np.vstack([y_stack, q_update])
         return x_stack, y_stack
 
     def __check_early_stopping(self, early_stopping, idx_epi, buf_result):
@@ -268,3 +291,17 @@ class DQN(Agent):
                 if early_stopping.check_stopping(flg):
                     return False
         return True
+
+    def __report(self, episode, steps, state_cur, elapsed_time, lastest_score, reward):
+        mins = int(elapsed_time / 60)
+        secondes = int(elapsed_time % 60)
+        colour = '\033[92m' if reward > 0 else '\033[91m'
+        print("episode: " + str(episode).rjust(4)
+              #+ ' ε: {:.3f}'.format(self.dqn_update.e)
+              + " steps: " + str(steps).rjust(3)
+              + " state_cur: [" + str(state_cur).rjust(2) + "]"
+              + ' time: {:02d}'.format(mins)
+              + ':{:02d}'.format(secondes)
+              + " score: " + str(lastest_score).rjust(2)
+              + ' memory:' + str(len(self.__replay_buffer)).rjust(4)
+              + f' reward: {colour}' + f"{reward:+.1f}" + '\033[0m')
