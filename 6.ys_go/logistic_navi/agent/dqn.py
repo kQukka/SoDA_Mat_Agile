@@ -275,7 +275,7 @@ class DQN(Agent):
                 # q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
 
                 # !Q net 강의
-                q_update[action] = reward + discount * np.argmax(q_target)
+                q_update[action] = reward + discount * np.max(q_target)
 
             # # Q map 전체 optimize
             # q_map_update[state_cur] = q_update
