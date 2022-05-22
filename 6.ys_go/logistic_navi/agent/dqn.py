@@ -146,12 +146,6 @@ class DQN(Agent):
             buf_result = self._run_episodes(max_step, idx_epi=idx_epi, setting=[greedy, noise])
             result_step.append(buf_result)
 
-            # fix
-            if idx_epi == 0:
-                self.epsilon = self.max_epsilon
-            if self.epsilon > self.min_epsilon:
-                self.epsilon = self.epsilon * greedy
-
             # train every interval
             if idx_epi % interval_train == 0:
                 if len(self.__replay_buffer) >= buffer:
@@ -197,6 +191,12 @@ class DQN(Agent):
         cnt_step = 0
         result_step = None
 
+        # fix
+        if idx_epi == 0:
+            self.epsilon = self.max_epsilon
+        if self.epsilon > self.min_epsilon:
+            self.epsilon = self.epsilon * greedy
+            
         while not done:
             q_value = self.dqn_target.predict(self._one_hot(state_cur))
             action = 0
