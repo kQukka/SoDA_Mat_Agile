@@ -198,7 +198,7 @@ class DQN(Agent):
             self.epsilon = self.epsilon * greedy
             
         while not done:
-            q_value = self.dqn_target.predict(self._one_hot(state_cur))
+            q_value = self.dqn_update.predict(self._one_hot(state_cur))
             action = 0
             # 첫스텝은 action 고정
             if cnt_step == 0:
