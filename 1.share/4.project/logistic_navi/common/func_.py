@@ -46,15 +46,15 @@ def create_dir(path):
 
 
 def make_path(path, name_file, extension):
-    path = f'{path}/{name_file}{extension}'
+    buf_path = f'{path}/{name_file}{extension}'
     if os.path.exists(path):
         for idx in range(100):
             name_file_ = f'{name_file}_{idx}'
-            path = f'{path}/{name_file_}.{extension}'
-            if not os.path.exists(path):
-                return path
+            buf_path = f'{path}/{name_file_}{extension}'
+            if not os.path.exists(buf_path):
+                return buf_path
         return False
-    return path
+    return buf_path
 
 
 

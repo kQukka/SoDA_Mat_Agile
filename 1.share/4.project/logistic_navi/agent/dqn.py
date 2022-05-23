@@ -8,7 +8,7 @@ import tensorflow as tf
 from .agent import Agent
 from .common import one_hot
 from common.func_ import save, load, create_dir, make_path, edit
-from env_.logistic.common import ID_GOAL, INITIAL_ACTION, STR_RESULT, IDX_ACTION_UP
+from env_.logistic.common import ID_GOAL, INITIAL_ACTION, STR_RESULT, IDX_ACTION_UP, IDX_ACTION_DOWN
 
 
 class Network:
@@ -86,6 +86,10 @@ class DQN(Agent):
 
     def save_result(self, set_run):
         data_ = [[time.strftime("%y%m%d_%H:%M:%S")]]
+        time_taken = time.time() - self.start_time
+        mins = int(time_taken / 60)
+        secondes = int(time_taken % 60)
+        data_.append([f'taken time : {mins}m {secondes}s'])
         name = ['num_episodes', 'max_step', 'buffer', 'sampling',
                 'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'greedy', 'noise', 'lr_action', 'discount']
         data_.extend(self.get_str_setting(name, set_run))
@@ -132,10 +136,12 @@ class DQN(Agent):
             early_stopping=False, save_result=False, **kwargs):
         greedy, noise, lr_action, discount = self._get_setting(kwargs)
         max_step = self.__init_run(max_step, size_hidden, buffer)
-
         set_run = [num_episodes, max_step, buffer, sampling,
                    size_hidden, epoch, learning_rate, interval_train, greedy, noise, lr_action, discount]
         self.make_dir_log(set_run)
+
+        # debug
+        self.start_time = time.time()
 
         result_step = []
         for idx_epi in range(num_episodes):
@@ -188,7 +194,7 @@ class DQN(Agent):
         cnt_step = 0
         result_step = None
         while not done:
-            q_value = self.dqn_target.predict(self._one_hot(state_cur))
+            q_value = self.dqn_update.predict(self._one_hot(state_cur))
             action = 0
             # 첫스텝은 action 고정
             if cnt_step == 0:
@@ -204,8 +210,9 @@ class DQN(Agent):
                          p_cur, p_new, state_cur, state_new,
                          reward, done, STR_RESULT[result_step]])
 
-            ## ksy
             if done:
+                self._decay_epsilon(greedy)
+                # debug
                 elapsed_time = time.time() - self.start_time
                 if reward == 10:
                     self.lastest_reward.append(1)
@@ -214,6 +221,7 @@ class DQN(Agent):
                 lastest_score = sum(self.lastest_reward)
                 self.__report(idx_epi, cnt_step, state_cur, elapsed_time, lastest_score, reward)
 
+            p_cur = p_new
             state_cur = state_new
             cnt_step += 1
             if cnt_step > max_step:
@@ -260,12 +268,7 @@ class DQN(Agent):
                 q_update[action] = reward
             else:
                 q_target = self.dqn_target.predict(self._one_hot(state_next))
-                # # !DQN 강의
-                # q_pred = self.dqn_update.predict(self._one_hot(state_next))
-                # q_update[action] = reward + discount * q_target[np.argmax(q_pred)]
-
-                # !Q net 강의
-                q_update[action] = reward + discount * np.argmax(q_target)
+                q_update[action] = reward + discount * np.max(q_target)
 
             # # Q map 전체 optimize
             # q_map_update[state_cur] = q_update

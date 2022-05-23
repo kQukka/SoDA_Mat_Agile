@@ -50,12 +50,14 @@ class Agent:
             self.__num_progress = num_
         return num_
 
+    def _decay_epsilon(self, greedy):
+        if self.epsilon > self.min_epsilon:
+            self.epsilon = self.epsilon * greedy
+
     def _get_action_noise(self, q_value, idx_epi=0, greedy=0, noise=False):
         if greedy:
             if idx_epi == 0:
                 self.epsilon = self.max_epsilon
-            if self.epsilon > self.min_epsilon:
-                self.epsilon = self.epsilon * greedy
             if np.random.rand(1) < self.epsilon:
                 return np.random.choice(self.env.num_action)
             else:
