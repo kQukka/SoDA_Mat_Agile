@@ -50,7 +50,7 @@ class Agent:
             self.__num_progress = num_
         return num_
 
-    def _get_action_noise(self, q_value, idx_epi=0, greedy=0, noise=False):
+    def _get_action_noise(self, q_value, idx_epi=0, greedy=True, noise=False):
         if greedy:
             # if idx_epi == 0:
             #     self.epsilon = self.max_epsilon

@@ -104,11 +104,14 @@ class DQN(Agent):
         path = self.__path_dir+f'/log_batch_epi_{idx_epi}.csv'
         data_ = [[f'idx_epoch : {idx_epoch}, loss_pre : {loss_pre}, loss_aft : {loss_aft}, dif : {loss_aft-loss_pre}']]
         buf = []
+        # 안되면 사용
+        # for idx, sample in enumerate(minibatch):
+        #     data_.extend(sample)
         for idx, sample in enumerate(minibatch):
             buf.append(sample)
-            if idx % 10 == 0:
-                data_.extend(buf)
-                buf.clear()
+            # if idx % 10 == 0:
+            data_.extend(buf)
+            buf.clear()
         data_.append([])
         edit(path, data_)
 
@@ -128,7 +131,7 @@ class DQN(Agent):
 
     # -----------------------------------------------------------------------------------------------------------
     def run(self, num_episodes, max_step=None, buffer=2500, sampling=32,
-            size_hidden=1, epoch=50, learning_rate=0.1, interval_train=10,
+            size_hidden=1, epoch=50, learning_rate=0.1, interval_train=10, run_time=2000,
             early_stopping=False, save_result=False, **kwargs):
         greedy, noise, lr_action, discount = self._get_setting(kwargs)
         max_step = self.__init_run(max_step, size_hidden, buffer)
@@ -140,7 +143,6 @@ class DQN(Agent):
         result_step = []
         self.start_time = time.time()
 
-
         for idx_epi in range(num_episodes):
             start_time = time.time()
             buf_result = self._run_episodes(max_step, idx_epi=idx_epi, setting=[greedy, noise])
@@ -148,7 +150,7 @@ class DQN(Agent):
 
             # train every interval
             if idx_epi % interval_train == 0:
-                if len(self.__replay_buffer) >= buffer:
+                if len(self.__replay_buffer) >= run_time:
                     loss_pre, loss_aft = self.__train(idx_epi, epoch, sampling, discount)
                     self.save_log_train(idx_epi, loss_pre, loss_aft, self.dqn_target.get_q_map())
 
@@ -196,9 +198,10 @@ class DQN(Agent):
             self.epsilon = self.max_epsilon
         if self.epsilon > self.min_epsilon:
             self.epsilon = self.epsilon * greedy
-            
+
         while not done:
             q_value = self.dqn_update.predict(self._one_hot(state_cur))
+
             action = 0
             # 첫스텝은 action 고정
             if cnt_step == 0:
@@ -209,6 +212,7 @@ class DQN(Agent):
             # Get new state_cur and reward from environment
             p_new, reward, done, result_step = self.env.step(action)
             state_new = self._convert_p_to_idx(p_new)
+
             self.__replay_buffer.append((state_cur, action, reward, state_new, done))
             log_.append([time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
                          p_cur, p_new, state_cur, state_new,
@@ -222,6 +226,7 @@ class DQN(Agent):
                 else:
                     self.lastest_reward.append(0)
                 lastest_score = sum(self.lastest_reward)
+
                 self.__report(idx_epi, cnt_step, state_cur, elapsed_time, lastest_score, reward)
 
             state_cur = state_new
@@ -248,13 +253,18 @@ class DQN(Agent):
             self.dqn_update.update(x_stack, y_stack)
             loss_aft = float(self.dqn_update.get_loss(x_stack, y_stack))
             self.save_log_batch(idx_epi, idx_epoch, loss_pre, loss_aft, minibatch)
+
         print('[LOG] epi:', idx_epi, 'loss:', loss_pre, '=>', loss_aft)
 
         # 일정 epi 횟수마다 q_pred의 W로 업데이트 (W2_1, W2_2 = W1_1, W1_2)
         loss_pre = float(self.dqn_target.get_loss(x_stack, y_stack))
-        self.dqn_target.w_1 = tf.Variable(tf.identity(self.dqn_update.w_1), dtype=tf.float32)
-        self.dqn_target.w_2 = tf.Variable(tf.identity(self.dqn_update.w_2), dtype=tf.float32)
-        loss_aft = float(self.dqn_target.get_loss(x_stack, y_stack))
+        if idx_epi % 1000 == 0:
+            self.dqn_target.w_1 = tf.Variable(tf.identity(self.dqn_update.w_1), dtype=tf.float32)
+            self.dqn_target.w_2 = tf.Variable(tf.identity(self.dqn_update.w_2), dtype=tf.float32)
+            loss_aft = float(self.dqn_target.get_loss(x_stack, y_stack))
+        # self.dqn_target.w_1 = tf.Variable(tf.identity(self.dqn_update.w_1), dtype=tf.float32)
+        # self.dqn_target.w_2 = tf.Variable(tf.identity(self.dqn_update.w_2), dtype=tf.float32)
+        # loss_aft = float(self.dqn_target.get_loss(x_stack, y_stack))
         return loss_pre, loss_aft
 
     def __make_target(self, minibatch, discount):
