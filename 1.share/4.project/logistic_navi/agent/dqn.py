@@ -65,7 +65,7 @@ class DQN(Agent):
 
     # -----------------------------------------------------------------------------------------------------------
     # region SAVE
-    def make_dir_log(self, set_run):
+    def make_dir_log(self, set_run, name):
         create_dir(f'./log')
         create_dir(f'./log/dqn')
         name_set = f'{set_run[0]}_{set_run[3]}_{set_run[4]}_{set_run[5]}'
@@ -73,29 +73,29 @@ class DQN(Agent):
         try:
             create_dir(path)
             self.__path_dir = path
-            self.save_info(set_run)
+            self.save_info(set_run, name)
             return True
         except:
             return False
 
-    def save_info(self, set_run):
-        name = ['num_episodes', 'max_step', 'buffer', 'sampling',
-                'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'greedy', 'noise', 'lr_action', 'discount']
+    def save_info(self, set_run, name):
         data_ = self.get_str_setting(name, set_run)
         save(make_path(self.__path_dir, 'info', '.csv'), data_)
 
-    def save_result(self, set_run):
+    def save_result(self, set_run, name):
         data_ = [[time.strftime("%y%m%d_%H:%M:%S")]]
         time_taken = time.time() - self.start_time
         mins = int(time_taken / 60)
         secondes = int(time_taken % 60)
         data_.append([f'taken time : {mins}m {secondes}s'])
-        name = ['num_episodes', 'max_step', 'buffer', 'sampling',
-                'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'greedy', 'noise', 'lr_action', 'discount']
         data_.extend(self.get_str_setting(name, set_run))
         data_.extend(self.env.get_result())
         data_.append([])
         data_.append(['q-map'])
+        data_.append(['dqn_update'])
+        data_.extend(self.dqn_update.get_q_map())
+        data_.append([])
+        data_.append(['dqn_target'])
         data_.extend(self.dqn_target.get_q_map())
         save(make_path(self.__path_dir, 'result', '.csv'), data_)
 
@@ -107,19 +107,27 @@ class DQN(Agent):
     def save_log_batch(self, idx_epi, idx_epoch, loss_pre, loss_aft, minibatch):
         path = self.__path_dir+f'/log_batch_epi_{idx_epi}.csv'
         data_ = [[f'idx_epoch : {idx_epoch}, loss_pre : {loss_pre}, loss_aft : {loss_aft}, dif : {loss_aft-loss_pre}']]
-        buf = []
         for idx, sample in enumerate(minibatch):
-            buf.append(sample)
-            if idx % 10 == 0:
-                data_.extend(buf)
-                buf.clear()
+            data_.append([sample])
         data_.append([])
         edit(path, data_)
 
-    def save_log_train(self, idx_epi, loss_pre, loss_aft, q_map):
-        path = self.__path_dir+f'/log_train_epi_{idx_epi}.csv'
-        data_ = [[f'loss_pre : {loss_pre}, loss_aft : {loss_aft}, dif : {loss_aft-loss_pre}']]
-        data_.extend(q_map)
+    def save_log_train(self, idx_epi, loss_pre, loss_aft):
+        path = self.__path_dir+f'/log_train.csv'
+        data_ = [[f'idx_epi: {idx_epi}'],
+                 [f'loss_pre : {loss_pre}, loss_aft : {loss_aft}, dif : {loss_aft - loss_pre}'],
+                 ['dqn_update']]
+        data_.extend(self.dqn_update.get_q_map())
+        data_.append([])
+        edit(path, data_)
+
+    def save_log_synch(self, idx_epi, loss_pre, loss_aft):
+        path = self.__path_dir+f'/log_synch.csv'
+        data_ = [[f'idx_epi: {idx_epi}'],
+                 [f'loss_pre : {loss_pre}, loss_aft : {loss_aft}, dif : {loss_aft - loss_pre}'],
+                 ['dqn_target']]
+        data_.extend(self.dqn_target.get_q_map())
+        data_.append([])
         edit(path, data_)
 
     def get_str_setting(self, name, setting):
@@ -132,31 +140,43 @@ class DQN(Agent):
 
     # -----------------------------------------------------------------------------------------------------------
     def run(self, num_episodes, max_step=None, buffer=2500, sampling=32,
-            size_hidden=1, epoch=50, learning_rate=0.1, interval_train=10,
+            size_hidden=1, epoch=50, learning_rate=0.1, interval_train=10, interval_synch=10,
             early_stopping=False, save_result=False, **kwargs):
         greedy, noise, lr_action, discount = self._get_setting(kwargs)
         max_step = self.__init_run(max_step, size_hidden, buffer)
+
+        name = ['num_episodes', 'max_step', 'buffer', 'sampling',
+                'size_hidden', 'epoch', 'learning_rate', 'interval_train', 'interval_synch'
+                'greedy', 'noise', 'lr_action', 'discount']
         set_run = [num_episodes, max_step, buffer, sampling,
                    size_hidden, epoch, learning_rate, interval_train, greedy, noise, lr_action, discount]
-        self.make_dir_log(set_run)
+        self.make_dir_log(set_run, name)
 
         # debug
         self.start_time = time.time()
 
         result_step = []
+        cnt_train = 0
         for idx_epi in range(num_episodes):
             start_time = time.time()
             buf_result = self._run_episodes(max_step, idx_epi=idx_epi, setting=[greedy, noise])
             result_step.append(buf_result)
 
             # train every interval
+            x_stack = None
+            y_stack = None
             if idx_epi % interval_train == 0:
                 if len(self.__replay_buffer) >= buffer:
-                    loss_pre, loss_aft = self.__train(idx_epi, epoch, sampling, discount)
-                    self.save_log_train(idx_epi, loss_pre, loss_aft, self.dqn_target.get_q_map())
-
+                    x_stack, y_stack, loss_pre, loss_aft = self.__train(idx_epi, epoch, sampling, discount)
+                    self.save_log_train(idx_epi, loss_pre, loss_aft)
+                    cnt_train += 1
                     print(f'{(time.time() - start_time)} seconds')
                     # self.__replay_buffer.clear()
+
+            if cnt_train >= interval_synch:
+                cnt_train = 0
+                loss_pre, loss_aft = self.__synch_network(x_stack, y_stack)
+                self.save_log_synch(idx_epi, loss_pre, loss_aft)
             num_ = self._print_progress(idx_epi, num_episodes)
 
             if not self.__check_early_stopping(early_stopping, idx_epi, buf_result):
@@ -164,7 +184,7 @@ class DQN(Agent):
                 break
 
         if save_result:
-            self.save_result(set_run)
+            self.save_result(set_run, name)
         gc.collect()
         return self.dqn_target.get_q_map(), result_step
 
@@ -247,7 +267,9 @@ class DQN(Agent):
             loss_aft = float(self.dqn_update.get_loss(x_stack, y_stack))
             self.save_log_batch(idx_epi, idx_epoch, loss_pre, loss_aft, minibatch)
         print('[LOG] epi:', idx_epi, 'loss:', loss_pre, '=>', loss_aft)
+        return x_stack, y_stack, loss_pre, loss_aft
 
+    def __synch_network(self, x_stack, y_stack):
         # 일정 epi 횟수마다 q_pred의 W로 업데이트 (W2_1, W2_2 = W1_1, W1_2)
         loss_pre = float(self.dqn_target.get_loss(x_stack, y_stack))
         self.dqn_target.w_1 = tf.Variable(tf.identity(self.dqn_update.w_1), dtype=tf.float32)
