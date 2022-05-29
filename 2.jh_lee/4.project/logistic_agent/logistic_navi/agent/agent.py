@@ -8,6 +8,9 @@ class Agent:
         self.env = env
         self._size_input = size_input
         self._size_output = size_output
+        self.min_epsilon = 0.01
+        self.max_epsilon = 1.0
+        self.epsilon = 1.0
 
         self._name_setting = []
         self._init_setting = []
@@ -47,15 +50,20 @@ class Agent:
             self.__num_progress = num_
         return num_
 
-    def _get_action_noise(self, q_value, idx=0, greedy=False, noise=False):
+    def _decay_epsilon(self, greedy):
+        if self.epsilon > self.min_epsilon:
+            self.epsilon = self.epsilon * greedy
+
+    def _get_action_noise(self, q_value, idx_epi=0, greedy=0, noise=False):
         if greedy:
-            e = 1. / ((idx // 1000) + 1)
-            if np.random.rand(1) < e:
+            if idx_epi == 0:
+                self.epsilon = self.max_epsilon
+            if np.random.rand(1) < self.epsilon:
                 return np.random.choice(self.env.num_action)
             else:
                 return random_argmax(q_value)
         elif noise:
-            return np.argmax(q_value + np.random.randn(1, self.env.action_space.n) / (idx + 1))
+            return np.argmax(q_value + np.random.randn(1, self.env.num_action) / (idx_epi + 1))
         else:
             return random_argmax(q_value)
 
@@ -64,3 +72,4 @@ class Agent:
 
     def _convert_p_to_idx(self, p_):
         return (p_[0] * self.env.width) + p_[1]
+

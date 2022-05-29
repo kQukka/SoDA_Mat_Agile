@@ -34,15 +34,6 @@ ID_GRID_OBSTACLE = 88
 ID_GRID_START = 66
 ID_GRID_GOAL = 99
 
-# reward
-# REWARD_NONE = 0
-# REWARD_NOT_MOVE = -10
-# REWARD_MOVE = 1
-# REWARD_OBSTACLE = -10
-# REWARD_OUT_GIRD = -10
-# REWARD_RETURN = -10
-# REWARD_GOAL = 10
-
 # step result
 ID_NOT_MOVE = 0
 ID_GENERAL_MOVE = 1
@@ -59,10 +50,12 @@ class REWARD:
         self.NONE = 0
         self.NOT_MOVE = -10
         self.MOVE = 0
+        self.MOVE_SUB = 0
         self.OBSTACLE = -10
         self.OUT_GIRD = -10
         self.RETURN = -10
         self.GOAL = 10
-        self.NAME = ['NONE', 'NOT_MOVE', 'MOVE', 'OBSTACLE', 'OUT_GIRD', 'RETURN', 'GOAL']
+        self.NAME = ['NONE', 'NOT_MOVE', 'MOVE', 'MOVE_SUB',
+                     'OBSTACLE', 'OUT_GIRD', 'RETURN', 'GOAL']
 
 

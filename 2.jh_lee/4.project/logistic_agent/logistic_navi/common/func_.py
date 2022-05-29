@@ -14,14 +14,14 @@ def random_argmax(vector):
 
 def save(path, str_):
     with open(path, 'w', encoding='utf-8', newline='') as f:
-        wr = csv.writer(f)
+        wr = csv.writer(f, delimiter='\t')
         for s in str_:
             wr.writerow(s)
 
 
 def edit(path, str_):
     with open(path, 'a', encoding='utf-8', newline='') as f:
-        wr = csv.writer(f)
+        wr = csv.writer(f, delimiter='\t')
         for s in str_:
             wr.writerow(s)
 
@@ -46,15 +46,15 @@ def create_dir(path):
 
 
 def make_path(path, name_file, extension):
-    path = f'{path}/{name_file}{extension}'
+    buf_path = f'{path}/{name_file}{extension}'
     if os.path.exists(path):
         for idx in range(100):
             name_file_ = f'{name_file}_{idx}'
-            path = f'{path}/{name_file_}.{extension}'
-            if not os.path.exists(path):
-                return path
+            buf_path = f'{path}/{name_file_}{extension}'
+            if not os.path.exists(buf_path):
+                return buf_path
         return False
-    return path
+    return buf_path
 
 
 
