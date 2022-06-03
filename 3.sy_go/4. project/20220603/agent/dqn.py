@@ -244,6 +244,10 @@ class DQN(Agent):
             p_new, reward, done, result_step = self.env.step(action)
             state_new = self._convert_p_to_idx(p_new)
 
+            # 예외처리 : 시작지점과 Goal Item이 붙어있는 경우 장애물로 처리
+            if reward == self.env.REWARD.GOAL and cnt_step == 0:
+                reward = self.env.REWARD.OBSTACLE
+
             self.__replay_buffer.append((state_cur, action, reward, state_new, done))
             self.__temp_buffer.append((state_cur, action, reward, state_new, done))  # ksy
             log_.append([time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
@@ -252,11 +256,7 @@ class DQN(Agent):
 
             elapsed_time = time.time() - self.agent_start_time
             if done:
-                # 예외처리 : 시작지점과 Goal Item이 붙어있는 경우 장애물로 처리
-                if reward == self.env.REWARD.GOAL and cnt_step == 0:
-                    reward = self.env.REWARD.OBSTACLE
-                    self.lastest_reward.append(0)
-                elif reward == self.env.REWARD.GOAL:
+                if reward == self.env.REWARD.GOAL:
                     self.lastest_reward.append(1)
                     while len(self.__temp_buffer) > 0 and cnt_step <= self.__goal_min_step:
                         self.__goal_buffer.clear()
@@ -456,7 +456,7 @@ class DQN(Agent):
 
     # -----------------------------------------------------------------------------------------------------------
     def play_agent(self, size_hidden, max_step):
-        # ksy3 - 저장된 가중치 초기화
+        # ksy3 - 저장된 가중치 초기화elf.__temp_buffe
         self.init_dqn_network(size_hidden)
 
         # env 초기화, 시작 state_cur 설정
