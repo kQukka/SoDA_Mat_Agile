@@ -145,8 +145,7 @@ def run_q_net():
 
 if __name__ == '__main__':
     # run_q_learning()
-    for idx in range(100):
-        print(idx)
+    for _ in range(20):
         run_a2c()
 
 

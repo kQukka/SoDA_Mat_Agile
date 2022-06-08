@@ -95,6 +95,18 @@ class LogisticEnv:
             self.__p_current = (new_y, new_x)
         return (new_y, new_x), reward, done, result_step
 
+    def pred_step(self, action):
+        if not self.__p_current:
+            return False, False, False, False, False
+        cur_y, cur_x = self.__p_current
+
+        new_y, new_x = self.__apply_action(action, cur_y, cur_x)
+        result_step, reward, done = self.__get_reward(cur_y, cur_x, new_y, new_x)
+        if result_step == ID_OUT_GRID:
+            new_y = cur_y
+            new_x = cur_x
+        return (new_y, new_x), reward, done, result_step
+
     def get_gird(self):
         return copy.deepcopy(self.__grid)
 

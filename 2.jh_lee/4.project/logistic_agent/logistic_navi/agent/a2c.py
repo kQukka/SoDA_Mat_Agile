@@ -61,21 +61,18 @@ class A2C(Agent):
         self._init_setting = [False, False, 1, 0.99]
 
         self.start_time = None
-        self._size_output = size_output
-
         self.__path_dir = None
         self.__path_log = None
 
         # 액터-크리틱 하이퍼파라미터
         self.discount_factor = 0.99
         self.learning_rate = 0.001
-
         self.sum_step = 0
 
         # 정책신경망과 가치신경망 생성
         self.model = Network(self._size_output)
         # 최적화 알고리즘 설정, 미분값이 너무 커지는 현상을 막기 위해 clipnorm 설정
-        self.optimizer = Adam(lr=self.learning_rate, clipnorm=5.0)
+        self.optimizer = Adam(learning_rate=self.learning_rate, clipnorm=5.0)
 
     # -----------------------------------------------------------------------------------------------------------
     # region SAVE
@@ -141,63 +138,145 @@ class A2C(Agent):
         p_cur = self.env.reset()
         state_cur = self._convert_p_to_idx(p_cur)
 
+        log_step, result_step = self.__run_loop_step(idx_epi, p_cur, state_cur, max_step, epoch)
+
+        # done = False
+        # cnt_step = 0
+        # result_step = None
+        # score_400 = 0
+        # time_400 = 0
+        # while not done:
+        #     self.sum_step += 1
+        #     action = self.__get_action(self._one_hot(state_cur))
+        #     if cnt_step == 0:
+        #         action = 3
+        #
+        #     p_new, reward, done, result_step = self.env.step(action)
+        #     state_new = self._convert_p_to_idx(p_new)
+        #
+        #     reward, done = self.__check_reward(cnt_step, max_step, result_step, done, (2 / 3))
+        #     loss = self.__train_done(epoch, result_step, state_cur, action, reward, state_new, done)
+        #
+        #     # debug
+        #     time_400, score_400 = self.__print_log(done, idx_epi, loss, result_step, cnt_step, time_400, score_400)
+        #     log_.append([cnt_step, time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
+        #                  p_cur, p_new, state_cur, state_new,
+        #                  reward, done, STR_RESULT[result_step], loss])
+        #     p_cur = p_new
+        #     state_cur = state_new
+        #     cnt_step += 1
+        # log_.append(['score_400 : ', score_400, 'time-400 : ', time_400,
+        #              'score : ', round(self.sum_step / (idx_epi+1), 3),
+        #              'time : ', round(time.time() - self.start_time, 3)])
+        log_.extend(log_step)
+        log_.append([])
+        self.save_log_epi(log_)
+        del log_
+        del log_step
+        if idx_epi % 100 == 0:
+            self.model.save_weights(f"./save_model/model_{idx_epi}", save_format="tf")
+        return result_step
+
+    def __run_loop_step(self, idx_epi, p_cur, state_cur, max_step, epoch):
+        log_ = []
+        num_match = 5
+        buffer_state = []
         done = False
         cnt_step = 0
         result_step = None
+        score_400 = 0
+        time_400 = 0
         while not done:
             self.sum_step += 1
             action = self.__get_action(self._one_hot(state_cur))
             if cnt_step == 0:
                 action = 3
 
+            action = self.__check_action(action, num_match, buffer_state, state_cur)
             p_new, reward, done, result_step = self.env.step(action)
             state_new = self._convert_p_to_idx(p_new)
-            if cnt_step >= max_step:
-                reward = self.env.REWARD.NOT_MOVE
-                done = True
-            # 매 타임스텝마다 학습
-            elif result_step == ID_GENERAL_MOVE:
-                if cnt_step >= max_step * (2/3):
-                    reward = self.env.REWARD.MOVE_SUB
 
-            if done:
-                loss = 0
-                num_loop = epoch
-                if (result_step == ID_GOAL) or (result_step == ID_OBSTACLE):
-                    num_loop = epoch*10
-                for _ in range(num_loop):
-                    loss = self.__train(state_cur, action, reward, state_new, done)
-                    if loss < 1:
-                        break
-                # print(f'[LOG] epi: {idx_epi}, loss: {loss}, '
-                #       f'result_step : {STR_RESULT[result_step]}, cnt_step : {cnt_step}, '
-                #       f'score : {self.sum_step / (idx_epi+1)}')
-            else:
-                loss = self.__train(state_cur, action, reward, state_new, done)
+            reward, done = self.__check_reward(reward, cnt_step, max_step, result_step, done, 2/3)
+            loss = self.__train_done(epoch, result_step, state_cur, action, reward, state_new, done)
 
+            # debug
+            time_400, score_400 = self.__print_log(done, idx_epi, loss, result_step, cnt_step, time_400, score_400)
             log_.append([cnt_step, time.strftime("%y%m%d_%H%M%S"), INITIAL_ACTION[action],
                          p_cur, p_new, state_cur, state_new,
                          reward, done, STR_RESULT[result_step], loss])
 
+            # update p, state, step
             p_cur = p_new
             state_cur = state_new
             cnt_step += 1
-
-            # if cnt_step > max_step:
-            #     break
-
-            # score_avg = 0.9 * score_avg + 0.1 * score if score_avg != 0 else score
-            #             print("episode: {:3d} | score avg: {:3.2f} | loss: {:.3f}".format(
-            #                   e, score_avg, np.mean(loss_list)))
-        log_.append(['score : ', self.sum_step / (idx_epi+1),
+        log_.append(['score_400 : ', score_400, 'time-400 : ', time_400,
+                     'score : ', round(self.sum_step / (idx_epi+1), 3),
                      'time : ', round(time.time() - self.start_time, 3)])
-        log_.append([])
-        self.save_log_epi(log_)
-        del log_
-        if idx_epi % 100 == 0:
-            self.model.save_weights(f"./save_model/model_{idx_epi}", save_format="tf")
-        # self.model.save_weights("./save_model/model", save_format="tf")
-        return result_step
+        return log_, result_step
+
+    def __check_action(self, action, num_match, buffer_state, state_cur):
+        p_new, reward, done, result_step = self.env.pred_step(action)
+        state_new = self._convert_p_to_idx(p_new)
+        if self.__check_loop_state(num_match, buffer_state, state_new):
+            buf_ = action
+            action = self.__get_action(self._one_hot(state_cur), idx_ignore=action)
+            print(f'state_cur : {state_cur}, buf_ : {buf_}, action : {action}')
+        return action
+
+    def __check_loop_state(self, num_match, buffer_state, state_new):
+        num_buf = 2 * num_match
+        buffer_state.append(state_new)
+        if len(buffer_state) > num_buf:
+            del buffer_state[0]
+        len_buf = len(buffer_state)
+        if len_buf == num_buf:
+            state_1 = buffer_state[-2]
+            state_2 = buffer_state[-1]
+            cnt_match = 0
+            for idx in range(num_match):
+                if state_1 == buffer_state[2*idx]:
+                    cnt_match += 1
+                if state_2 == buffer_state[1+(2*idx)]:
+                    cnt_match += 1
+            if cnt_match == len_buf:
+                buffer_state.clear()
+                return True
+        return False
+
+    def __print_log(self, done, idx_epi, loss, result_step, cnt_step, time_400, score_400):
+        if done:
+            print(f'[LOG] epi: {idx_epi}, loss: {loss}, '
+                  f'result_step : {STR_RESULT[result_step]}, cnt_step : {cnt_step}, '
+                  f'score : {self.sum_step / (idx_epi + 1)}')
+        if idx_epi == 400:
+            time_400 = round(time.time() - self.start_time, 3)
+            score_400 = round(self.sum_step / (idx_epi + 1), 3)
+        return time_400, score_400
+
+    def __check_reward(self, reward, cnt_step, max_step, result_step, done, rate):
+        # check over step
+        if cnt_step >= max_step:
+            reward = self.env.REWARD.NOT_MOVE
+            done = True
+        # check reference to apply reward(move_sub)
+        elif result_step == ID_GENERAL_MOVE:
+            if cnt_step >= (max_step * rate):
+                reward = self.env.REWARD.MOVE_SUB
+        return reward, done
+
+    def __train_done(self, epoch, result_step, state_cur, action, reward, state_new, done):
+        loss = 0
+        num_loop = epoch
+        if done:
+            if (result_step == ID_GOAL) or (result_step == ID_OBSTACLE):
+                num_loop = epoch * 10
+            for _ in range(num_loop):
+                loss = self.__train(state_cur, action, reward, state_new, done)
+                if loss < 1:
+                    break
+        else:
+            loss = self.__train(state_cur, action, reward, state_new, done)
+        return loss
 
     # 각 타임스텝마다 정책신경망과 가치신경망을 업데이트
     def __train(self, state_cur, action, reward, state_new, done):
@@ -228,13 +307,31 @@ class A2C(Agent):
         return np.array(loss)
 
     # 정책신경망의 출력을 받아 확률적으로 행동을 선택
-    def __get_action(self, state):
+    def __get_action(self, state, idx_ignore=None):
+        if idx_ignore is not None:
+            # policy = self.model.get_policy(state)
+            # policy = np.array(policy[0])
+            if idx_ignore < self._size_output:
+                # a = policy[idx_ignore]
+                # b = round(a/(self._size_output-1), 7)
+                # c = round(a-(b*(self._size_output-2)), 7)
+                # d = [b for _ in range(self._size_output-2)]
+                # d.append(c)
+                # cnt = 0
+                # for idx in range(self._size_output):
+                #     if idx == idx_ignore:
+                #         policy[idx] = 0
+                #         continue
+                #     policy[idx] += d[cnt]
+                #     cnt += 1
+                # # action = np.random.choice(self._size_output, 1, p=policy)[0]
+                action = np.random.choice(self._size_output, 1)[0]
+                return action
         policy = self.model.get_policy(state)
         policy = np.array(policy[0])
         return np.random.choice(self._size_output, 1, p=policy)[0]
 
     # -----------------------------------------------------------------------------------------------------------
-
     def __check_early_stopping(self, early_stopping, idx_epi, buf_result):
         # if early_stopping:
         #     if idx_epi == 0:
